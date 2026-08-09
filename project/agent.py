@@ -4,6 +4,7 @@ from typing import TypedDict, Annotated
 from langchain_core.messages import  SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import interrupt
+from langgraph.checkpoint.memory import InMemorySaver
 
 CUSTOMERS = [
 {
@@ -131,4 +132,5 @@ builder.add_conditional_edges(
 )
 builder.add_edge("ask_secret_question", END)
 
-graph = builder.compile()
+checkpoint_saver = InMemorySaver() #Save and restore states betweern requests. Only for demonstration purposes, in production you would use a persistent saver.
+graph = builder.compile(checkpointer=checkpoint_saver)
