@@ -1,10 +1,9 @@
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END, add_messages
 from typing import TypedDict, Annotated
-from langchain_core.messages import  SystemMessage
+from langchain_core.messages import  AIMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import interrupt
-from langgraph.checkpoint.memory import InMemorySaver
 
 CUSTOMERS = [
 {
@@ -80,11 +79,11 @@ def greeter(state: State):
 
 def route_after_greeter(state: State):
      if state["matches"] == 3:
-        return "authenticated"
-
+        return "bouncer"
      if state["matches"] == 2:
         return "secret_question"
-
+     
+     
      return "rejected"
 
 def ask_secret_question(state: State):
@@ -98,6 +97,41 @@ def ask_secret_question(state: State):
         "authenticated": provided_answer == correct_answer,
         "provided_secret_answer": provided_answer,
         "waiting_for_secret_answer": False
+    }
+
+def route_after_secret_question(state: State):
+    if state["authenticated"]:
+        return "bouncer"
+    return "rejected"
+
+def bouncer(state: State):
+    return {
+        "customer_type": state["customer_type"]
+    }
+
+def route_after_bouncer(state: State):
+    if state["customer_type"] == "premium":
+        return "premium"
+    if state["customer_type"] == "regular":
+        return "regular"
+    return "rejected"
+
+def premium_customer(state: State):
+    return {
+        "messages": [
+            AIMessage(
+                content="Welcome premium customer! How can I assist you today?"
+            )
+        ]
+    }
+
+def regular_customer(state: State):
+    return {
+        "messages": [
+            AIMessage(
+                content="Welcome regular customer! How can I assist you today?"
+            )
+        ]
     }
 
 def chatbot(state: State):
@@ -119,18 +153,47 @@ builder = StateGraph(State)
 
 builder.add_node("greeter", greeter)
 builder.add_node("ask_secret_question", ask_secret_question)
+builder.add_node("bouncer", bouncer)
+builder.add_node("premium_customer", premium_customer)
+builder.add_node("regular_customer", regular_customer)
+
 
 builder.add_edge(START, "greeter")
 builder.add_conditional_edges(
     "greeter", 
     route_after_greeter,
     {
-        "authenticated": END,
+        "bouncer": "bouncer",
         "secret_question": "ask_secret_question",
         "rejected": END,
     }
 )
-builder.add_edge("ask_secret_question", END)
+builder.add_conditional_edges(
+    "ask_secret_question",
+    route_after_secret_question,
+    {
+        "bouncer": "bouncer",
+        "rejected": END,
+    }
+)
+builder.add_conditional_edges(
+    "bouncer",
+    route_after_bouncer,
+    {
+        "premium": "premium_customer",
+        "regular": "regular_customer",
+        "rejected": END,
+    }
+)
 
-checkpoint_saver = InMemorySaver() #Save and restore states betweern requests. Only for demonstration purposes, in production you would use a persistent saver.
-graph = builder.compile(checkpointer=checkpoint_saver)
+builder.add_edge("premium_customer", END)
+builder.add_edge("regular_customer", END)
+
+
+def create_graph(checkpointer = None):
+    if checkpointer is None:
+        return builder.compile()
+
+    return builder.compile(checkpointer=checkpointer)
+
+graph = create_graph()

@@ -3,11 +3,15 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
-from agent import graph
+from agent import create_graph
+from langgraph.checkpoint.memory import InMemorySaver
 
 load_dotenv()
 
 app = FastAPI()
+checkpoint_saver = InMemorySaver() #Save and restore states betweern requests. Only for demonstration purposes, in production would use a persistent saver. LangSmith doesn't need it
+graph = create_graph(checkpointer=checkpoint_saver)
+
 
 @app.get("/")
 def root():
@@ -54,10 +58,16 @@ def start_chat(request: CustomerRequest):
 
     state = graph.get_state(config)
 
+    response = ""
+    if result.get("messages"):
+        response = result["messages"][-1].content
+
+    waiting_answer = state.values.get("waiting_for_secret_answer", False)
     return {
+        "response": response,
         "authenticated": state.values.get("authenticated", False),
-        "waiting_for_secret_answer": state.values.get("waiting_for_secret_answer", False),
-        "secret_question": state.values.get("secret_question", "")
+        "waiting_for_secret_answer": waiting_answer,
+        "secret_question": state.values.get("secret_question", "") if waiting_answer else ""
     }
 
 @app.patch("/chat/secret")
@@ -75,6 +85,12 @@ def secret_answer(request: SecretAnswerRequest):
         config = config
     )
 
+    response = ""
+    if result.get("messages"):
+        response = result["messages"][-1].content
+
     return {
-        "authenticated": result["authenticated"]
+        "response": response,
+        "authenticated": result.get("authenticated", False),
+        "customer_type": result.get("customer_type"),
     }
