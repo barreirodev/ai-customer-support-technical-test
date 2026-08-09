@@ -3,6 +3,7 @@ from langgraph.graph import StateGraph, START, END, add_messages
 from typing import TypedDict, Annotated
 from langchain_core.messages import  SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.types import interrupt
 
 CUSTOMERS = [
 {
@@ -40,6 +41,7 @@ class State(TypedDict):
     provided_secret_answer: str
 
     authenticated: bool
+    waiting_for_secret_answer: bool
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-3.1-flash-lite"
@@ -66,11 +68,13 @@ def greeter(state: State):
                 "secret_answer": customer["secret_answer"],
                 "customer_type": customer["customer_type"],
                 "authenticated": matches == 3,
+                "waiting_for_secret_answer": matches == 2
             }
 
     return {
         "matches": 0,
-        "authenticated": False
+        "authenticated": False,
+        "waiting_for_secret_answer": False
     }
 
 def route_after_greeter(state: State):
@@ -83,11 +87,16 @@ def route_after_greeter(state: State):
      return "rejected"
 
 def ask_secret_question(state: State):
-    provided_answer = state["provided_secret_answer"].strip().lower()
+    answer = interrupt({
+        "question": state["secret_question"]
+    })
+    provided_answer = answer.strip().lower()
     correct_answer = state["secret_answer"].strip().lower()
 
     return {
-        "authenticated": provided_answer == correct_answer
+        "authenticated": provided_answer == correct_answer,
+        "provided_secret_answer": provided_answer,
+        "waiting_for_secret_answer": False
     }
 
 def chatbot(state: State):
