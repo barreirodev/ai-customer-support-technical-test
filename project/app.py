@@ -15,20 +15,24 @@ def root():
     }
 
 class ChatRequest(BaseModel):
-    message: str
+    name: str
+    phone: str
+    iban: str
 
 @app.post("/chat")
 def chat(request: ChatRequest):
 
     result = graph.invoke(
-        {
-            "messages": [
-                HumanMessage(content=request.message)
-            ]
+         {
+            "messages": [],
+            "customer_name": request.name,
+            "customer_phone": request.phone,
+            "customer_iban": request.iban,
+            "authenticated": False,
         }
     )
 
     return {
-        "responses": result["messages"][-1].text
+        "authenticated": result["authenticated"]
     }
 
