@@ -62,6 +62,9 @@ def start_chat(request: CustomerRequest):
 
             "authenticated": False,
             "waiting_for_secret_answer": False,
+
+            "input_allowed": True,
+            "guardrail_reason": ""
         },
         
         config = config

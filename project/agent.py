@@ -5,6 +5,8 @@ from langchain_core.messages import  AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import interrupt
 
+from guardrail import (secret_answer_guardrail,check_user_input,guardrail_message)
+
 CUSTOMERS = [
 {
     "name": "Luis Gomez",
@@ -35,6 +37,11 @@ ACCOUNTS = [
     
 load_dotenv()
 
+llm = ChatGoogleGenerativeAI(
+    model="gemini-3.1-flash-lite"
+)
+
+
 class State(TypedDict):
     #Accumulate messages in the state
     messages: Annotated[list, add_messages]
@@ -58,9 +65,9 @@ class State(TypedDict):
     authenticated: bool
     waiting_for_secret_answer: bool
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite"
-)
+    guardrail_reason: str
+    input_allowed: bool
+
 
 def greeter(state: State):
     provided_name = state["provided_name"]
@@ -111,14 +118,25 @@ def ask_secret_question(state: State):
     answer = interrupt({
         "question": state["secret_question"]
     })
-    provided_answer = answer.strip().lower()
-    correct_answer = state["secret_answer"].strip().lower()
-
     return {
-        "authenticated": provided_answer == correct_answer,
-        "provided_secret_answer": provided_answer,
-        "waiting_for_secret_answer": False
+            "provided_secret_answer": answer,
+            "waiting_for_secret_answer": False
     }
+
+def secret_answer_guardrail_node(state: State):
+    return secret_answer_guardrail(state["provided_secret_answer"])
+
+def verify_secret_answer(state: State):
+    provided_answer = state["provided_secret_answer"].strip().lower()
+    correct_answer = state["secret_answer"].strip().lower()
+    return {
+        "authenticated": provided_answer == correct_answer
+    }
+
+def router_after_secret_answer_guardrail(state: State):
+    if state["input_allowed"]:
+        return "verify"
+    return "blocked"
 
 def bouncer(state: State):
     if not state["authenticated"]:
@@ -155,6 +173,20 @@ def ask_request(state: State):
             HumanMessage(content=request)
         ]
     }
+
+def ask_request_guardrail(state:State):
+    message = state["messages"][-1].content
+    result = check_user_input(message)
+    return{
+        "input_allowed": result == "allow",
+        "guardrail_reason": "User input blocked by guardrail" if result == "block" else "Request accepted"
+    }
+
+def route_after_request_guardrail(state: State):
+    if state["input_allowed"]:
+        return "specialist"
+    else:
+        return "blocked_response"
 
 def specialist(state: State):
     customer_type = state["customer_type"]
@@ -198,13 +230,28 @@ def non_client_response(state: State):
         ]
     }
 
+def blocked_response(state: State):
+    return{
+        "messages": [
+            guardrail_message()
+        ]
+    }
+
 builder = StateGraph(State)
 
 builder.add_node("greeter", greeter)
 builder.add_node("ask_secret_question", ask_secret_question)
+builder.add_node("secret_answer_guardrail", secret_answer_guardrail_node)
+builder.add_node("verify_secret_answer", verify_secret_answer)
+
 builder.add_node("bouncer", bouncer)
+
 builder.add_node("ask_request", ask_request)
+builder.add_node("ask_request_guardrail", ask_request_guardrail)
+
 builder.add_node("specialist", specialist)
+
+builder.add_node("blocked_response", blocked_response)
 builder.add_node("non_client_response", non_client_response)
 
 builder.add_edge(START, "greeter")
@@ -216,7 +263,16 @@ builder.add_conditional_edges(
         "secret_question": "ask_secret_question"
     }
 )
-builder.add_edge("ask_secret_question","bouncer")
+builder.add_edge("ask_secret_question","secret_answer_guardrail")
+builder.add_conditional_edges(
+    "secret_answer_guardrail",
+    router_after_secret_answer_guardrail,
+    {
+        "verify": "verify_secret_answer",
+        "blocked": "blocked_response"
+    }
+)
+builder.add_edge("verify_secret_answer","bouncer")
 
 builder.add_conditional_edges(
     "bouncer",
@@ -226,8 +282,18 @@ builder.add_conditional_edges(
         "non_client": "non_client_response",
     }
 )
-builder.add_edge("ask_request", "specialist")
+builder.add_edge("ask_request","ask_request_guardrail")
+builder.add_conditional_edges(
+    "ask_request_guardrail",
+    route_after_request_guardrail,
+    {
+        "specialist": "specialist",
+        "blocked_response": "blocked_response"
+    }
+)
+
 builder.add_edge("specialist", END)
+builder.add_edge("blocked_response", END)
 builder.add_edge("non_client_response", END)
 
 def create_graph(checkpointer = None):
