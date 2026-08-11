@@ -1,4 +1,4 @@
-from project.agent import greeter
+from project.greeter import greeter
 
 
 def test_greeter_authenticates_customer_with_three_matches():
