@@ -1,4 +1,4 @@
-from project.guardrail import check_user_input, secret_answer_guardrail
+from project.guardrail import check_user_input
 
 
 def test_blocks_prompt_injection():
