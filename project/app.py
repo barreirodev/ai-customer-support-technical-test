@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel
 from langgraph.types import Command
-from agent import create_graph
+from project.agent import create_graph
 from langgraph.checkpoint.memory import InMemorySaver
 
 load_dotenv()
