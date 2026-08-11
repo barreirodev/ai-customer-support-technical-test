@@ -5,7 +5,7 @@ from langchain_core.messages import  AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import interrupt
 
-from guardrail import (secret_answer_guardrail,check_user_input,guardrail_message)
+from project.guardrail import (secret_answer_guardrail,check_user_input,guardrail_message)
 
 CUSTOMERS = [
 {
