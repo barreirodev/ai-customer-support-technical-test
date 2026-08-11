@@ -4,6 +4,12 @@ Customer support assistant built with **LangGraph**, **FastAPI** and **Google Ge
 
 The application implements a customer authentication flow, customer routing, interrupt-based interactions and basic input guardrails.
 
+## Architecture
+
+The application follows a LangGraph workflow that separates customer identification, authentication, routing, guardrails and specialist support.
+
+![Architecture Diagram](diagram-architecture.png)
+
 ## Features
 
 * Customer identification using name, phone number and IBAN.
