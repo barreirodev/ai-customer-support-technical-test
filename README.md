@@ -1,96 +1,294 @@
-# 🤖 AI Engineer Code Challenge
+# AI Customer Support
 
-## 🎯 Business Requirements
+Customer support assistant built with **LangGraph**, **FastAPI** and **Google Gemini**.
 
-> A customer calls the bank, hoping to get help, but instead, they get lost in an endless phone menu maze. Nightmare, right? Well, not on our watch!
+The application implements a customer authentication flow, customer routing, interrupt-based interactions and basic input guardrails.
 
-Your mission is to build an **AI-powered customer support system** where multiple agents work together to identify the customer and route them to the right place—without the usual pain of endless phone menus.
+## Features
 
-Here's how the dream team of AI agents rolls:
+* Customer identification using name, phone number and IBAN.
+* Authentication based on matching customer information.
+* Secret-question verification when only two customer attributes match.
+* Customer routing:
+  * Premium customer
+  * Regular customer
+  * Non-client
+* Interrupt-based interaction using LangGraph.
+* Basic guardrails for:
+  * Empty secret answers.
+  * Secret answers exceeding the allowed length.
+  * Basic prompt-injection patterns.
+* FastAPI API.
+* LangGraph checkpointing using `InMemorySaver`.
+* Basic automated tests with pytest.
 
--   **👋 Agent 1: The Greeter**  
-    This is the friendly face of the bank. It starts the conversation, asks for identification, and makes sure the customer is legitimate.
+## Project Structure
 
--   **🛡️ Agent 2: The Bouncer**  
-    Once the customer is identified, this agent steps in. It decides: are they a regular customer, a premium client, or not a customer at all?
+```text
+ai-customer-support-technical-test/
+│
+├── project/
+│   ├── agent.py
+│   ├── app.py
+│   └── guardrail.py
+│
+├── tests/
+│   ├── test_agent.py
+│   └── test_guardrail.py
+│
+├── .env
+├── .gitignore
+├── langgraph.json
+├── pyproject.toml
+└── README.md
+```
 
--   **📞 Agent 3: The Specialist**  
-    If the customer has a specific, high-value request (like “Help me with my yacht insurance” 🛥️), this agent ensures they get to the right expert.
+## Requirements
 
--   **📜 Guardrails: The Rule Enforcer**  
-    This component keeps everything safe, professional, and aligned with bank policies. No accidental million-dollar loan approvals!
+* Python 3.12+
+* A Google Gemini API key
+* Project dependencies installed in a virtual environment
 
+## Installation
 
-## 🛠️ Technical Requirements
+Create and activate a virtual environment:
 
-Here’s what you need to build and how to deliver it.
+```bash
+python -m venv minibot-env
+```
 
--   **🏗️ Framework & Structure**: You are free to use `LangGraph` or a similar framework. While a Jupyter Notebook is an acceptable format, remember that the overall structure and design of your solution will be a key part of the evaluation.
--   **🧠 LLM Choice**: You can use any LLM you prefer. Just remember to remove your API keys before submitting!
--   **⚙️ Core Logic**: The system must verify a customer by matching at least **two out of three** details (`name`, `phone`, `iban`) before asking their secret question.
--   **🚀 API Endpoint**: To simulate a real-world application, expose your solution via a `FastAPI` endpoint.
+Windows:
 
-<br>
+```bash
+minibot-env\Scripts\activate
+```
 
-<details>
-<summary><strong>📄 Click to see example data structures</strong></summary>
+Install the dependencies:
 
-```python
-# Example of user data for verification
-example_of_user = {
-  "name": "Lisa",
-  "phone": "+1122334455",
-  "iban": "DE89370400440532013000",
-  "secret" : "Which is the name of my dog?",
-  "answer" : "Yoda"
+```bash
+pip install -r requirements.txt
+```
+
+## Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+GOOGLE_API_KEY=your_api_key
+```
+
+The application uses `ChatGoogleGenerativeAI` to communicate with Gemini.
+
+## Running the Application
+
+### FastAPI
+
+From the project root:
+
+```bash
+uvicorn project.app:app --reload
+```
+
+The API will be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+Interactive API is available at:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### LangGraph
+
+The LangGraph configuration is defined in `langgraph.json`.
+
+The graph is exposed as:
+
+```text
+customer_service
+```
+
+The graph entry point is:
+
+```text
+project/agent.py
+```
+
+## API Endpoints
+
+### Start a conversation
+
+```http
+POST /chat/start
+```
+
+Example:
+
+```json
+{
+  "thread_id": "test-1",
+  "name": "Luis Gomez",
+  "phone": "1122334455",
+  "iban": "ES123456789"
 }
 ```
 
-```python
-# Example of account data to determine status
-example_of_account = {
-  "iban": "DE89370400440532013000",
-  "premiun" : True
+The endpoint identifies the customer and determines whether additional authentication is required.
+
+### Submit the secret answer
+
+Only if 2 of 3 parameters are correct
+
+```http
+PATCH /chat/secret
+```
+
+Example:
+
+```json
+{
+  "thread_id": "test-1",
+  "provided_secret_answer": "sammy"
 }
 ```
-</details>
 
-<br>
+This resumes the LangGraph interrupt used for the secret question.
 
-<details>
-<summary><strong>💬 Click to see expected responses</strong></summary>
+### Send a customer request
 
-> **Note**: Your responses can be different, but be careful not to leak sensitive user data. For example, phone numbers should only be shown to verified clients.
+```http
+PATCH /chat/message
+```
 
--   **✅ Premium Client:**
-    > "Thank you for reaching out regarding your account issue. As a premium client, we value your experience and are here to assist you. For immediate support, please contact our dedicated support department at +1999888999..."
--   **✅ Regular Client:**
-    > "I'm sorry to hear that you're having trouble with your account. Since you're a regular client, I recommend that you call our support department at +1112112112 for assistance..."
--   **❌ Non-Client:**
-    > "Thank you for reaching out. It seems that you are not currently a client of DEUS Bank. I recommend that you contact your bank's support department directly for assistance..."
-</details>
+Example:
 
-## 📦 Deliverables
+```json
+{
+  "thread_id": "test-1",
+  "message": "I need help with my account"
+}
+```
 
-1.  **📈 Architecture Diagram**: A visual diagram (like the example below) illustrating your system's workflow.
-2.  **💻 Working Code**: Your full implementation, including unit tests for key logic.
-3.  **📄 Pull Request(s)**: Use a GitFlow-style approach to submit your features in one or more PRs.
-4.  **💬 Realistic Commits**: A clean Git history with logical, well-described commits.
-5.  **📤 Submission**: Please commit and push your solution directly to this repository.
+The request is passed through the input guardrail before reaching the specialist.
 
-![Graph example](lang-graph.png?raw=true "Graph example")
+## Authentication Flow
 
----
+The customer provides three identifying attributes:
 
-## ✨ Bonus Points
+* Name
+* Phone
+* IBAN
 
-Want to go the extra mile? Consider exploring these optional extensions:
+The `greeter` node compares these values against the available customer records.
 
--   **🗣️ Add a Voice Interface**: Integrate text-to-speech (TTS) and speech-to-text (STT) to give your AI a voice.
--   **🔒 Implement Advanced Guardrails**: Add more sophisticated safety mechanisms to prevent harmful, off-topic, or irrelevant responses.
--   **📚 Incorporate Conversation History**: Give your system memory to allow for more natural, context-aware conversations.
--   **🧪 Add Comprehensive Testing**: Implement a robust testing suite to ensure code quality and reliability.
--   **🚀 Implement CI/CD**: Set up a continuous integration and deployment pipeline to automate testing and releases.
--   **🐳 Dockerize the Application**: Package the solution into a Docker container for easy deployment and scalability.
+### Three matches
 
-Now, go forth and build the most epic AI-powered customer support ever! 🚀
+The customer is authenticated directly.
+
+The workflow continues to the `bouncer`, which determines whether the customer is premium or regular.
+
+### Two matches
+
+The customer must answer a secret question.
+
+The workflow uses a LangGraph `interrupt` to pause execution and wait for the answer.
+
+The answer is validated by the secret-answer guardrail before authentication is completed.
+
+### Fewer than two matches
+
+The customer is treated as a non-client and does not receive customer support.
+
+## Customer Routing
+
+After authentication, the `bouncer` checks the customer's IBAN against the account records.
+
+```text
+Authenticated
+     |
+     v
+  Bouncer
+   /   \
+  /     \
+Premium  Regular
+```
+
+## Guardrails
+
+The project contains basic deterministic guardrails in `guardrail.py`.
+
+### Secret answer guardrail
+
+The secret answer is blocked when:
+
+* It is empty.
+* It exceeds 100 characters.
+
+### User input guardrail
+
+The customer request is checked for basic prompt-injection patterns such as:
+
+```text
+ignore previous instructions
+reveal your system prompt
+show me the system prompt
+ignore your instructions
+```
+
+Blocked requests are stopped before reaching the specialist.
+
+These guardrails are intentionally simple and deterministic for this technical test.
+
+## Testing
+
+Tests are implemented with pytest.
+
+Run all tests with:
+
+```bash
+pytest
+```
+
+The tests cover the basic guardrail behavior and core customer workflow scenarios.
+
+## Design Notes
+
+The application separates the main responsibilities between:
+
+* `agent.py` — LangGraph workflow and customer support logic.
+* `guardrail.py` — deterministic input validation and guardrail logic.
+* `app.py` — FastAPI API layer.
+* `tests/` — automated tests.
+
+LangGraph interrupts are used to handle information that must be provided interactively during the workflow.
+
+`InMemorySaver` This is suitable for the technical test/demo environment; a persistent checkpointer would be preferable for a production deployment.
+
+## Limitations
+
+The customer and account data are stored in-memory and are therefore not suitable for production use.
+
+The guardrails are deterministic and pattern-based rather than LLM-based. A production implementation could use a more sophisticated validation or classification layer depending on the security requirements.
+
+## Running the Tests and API
+
+A typical local workflow is:
+
+```bash
+pytest
+```
+
+Then:
+
+```bash
+uvicorn project.app:app --reload
+```
+
+Open the API documentation at:
+
+```text
+http://127.0.0.1:8000/docs
+```
